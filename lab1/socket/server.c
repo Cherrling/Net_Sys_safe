@@ -7,7 +7,7 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <arpa/inet.h>
-
+#include <sys/stat.h>
 
 #define PORT 8899
 #define BUFSIZE 1024
@@ -40,18 +40,35 @@ void receive_file(int client_sock) {
         filename[pos++] = ch;
     }
     filename[pos] = '\0';
-    int len = recv(client_sock, &filesize, sizeof(filesize), 0);
-    if (len != sizeof(filesize)) {
-        fprintf(stderr, "接收文件大小失败，收到 %d 字节。\n", len);
+
+    // 检查文件名是否包含非法字符
+    if (strstr(filename, "..") != NULL || strchr(filename, '/') != NULL) {
+        fprintf(stderr, "Invalid filename\n");
         return;
     }
 
+    int len = recv(client_sock, &filesize, sizeof(filesize), 0);
+    if (len != sizeof(filesize)) {
+        fprintf(stderr, "Failed, received %d bytes\n", len);
+        return;
+    }
+    // 添加文件大小限制
+    const long MAX_FILE_SIZE = 1024 * 1024 * 100; // 100MB
+    if (filesize <= 0 || filesize > MAX_FILE_SIZE) {
+        fprintf(stderr, "Invalid file size\n");
+        return;
+    }
+
+    char filepath[512] = {0};
+    snprintf(filepath, sizeof(filepath), "server_dl/%s", filename);
+    
     printf("Received file: %s (%ld bytes)\n", filename, filesize);
 
-    FILE *fp = fopen(filename, "wb");
+
+    FILE *fp = fopen(filepath, "wb");
     if (!fp) {
         perror("fopen");
-        printf("尝试打开的文件名：%s\n", filename);
+        printf("Filepath: %s\n", filepath);
         return;
     }
 
@@ -73,7 +90,7 @@ void send_file(int client_sock,char *filename) {
     FILE *fp = fopen(filename, "rb");
     if (!fp) {
         perror("fopen");
-        printf("尝试打开的文件名：%s\n", filename);
+        printf("Filename: %s\n", filename);
         return;
     }
 
@@ -99,6 +116,16 @@ void send_file(int client_sock,char *filename) {
 int main() {
     int server_sock = socket(AF_INET, SOCK_STREAM, 0); // AF_INET for IPv4, SOCK_STREAM for TCP
 
+    struct stat st = {0};
+    if (stat("server_dl", &st) == -1) {
+        mkdir("server_dl", 0700);
+    }
+
+    if (server_sock < 0) {
+        perror("socket creation failed");
+        exit(EXIT_FAILURE);
+    }
+    
     struct sockaddr_in server_addr = {0};
     server_addr.sin_family = AF_INET; // IPv4
     server_addr.sin_port = htons(PORT);
@@ -107,7 +134,13 @@ int main() {
     bind(server_sock, (struct sockaddr *)&server_addr, sizeof(server_addr));
     listen(server_sock, 5);
 
-    printf("服务器现在正在监听 port : %d\n", PORT);
+    
+    if (listen(server_sock, 5) < 0) {
+        perror("listen failed");
+        exit(EXIT_FAILURE);
+    }
+
+    printf("Listening port : %d\n", PORT);
 
     while ( 1 ) {
         struct sockaddr_in client_addr;
@@ -122,9 +155,9 @@ int main() {
         } 
         else if (strcmp(command, "DOWNLOAD") == 0) {
             send_file_list(client_sock);
-            printf("等待客户端选择文件...\n");
+            printf("Waiting to choose file ...\n");
             recv(client_sock, filename, sizeof(filename), 0);
-            printf("客户端选择的文件：%s\n", filename);
+            printf("File:%s\n", filename);
             
             send_file(client_sock, filename);
         }

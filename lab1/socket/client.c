@@ -11,7 +11,7 @@
 
 
 void print_menu() {
-    printf("=== 文件传输客户端 ===\n");
+    printf("=== Client ===\n");
     printf("0. quit\n");
     printf("1. send\n");
     printf("2. download\n");
@@ -22,7 +22,7 @@ void print_menu() {
 void send_file(int sock) {
     char filename[0x100];
     chdir("../");
-    printf("当前目录下可发送的文件列表：\n");
+    printf("File list:\n");
     getchar();
     struct dirent **namelist;
     int n = scandir(".", &namelist, NULL, alphasort);
@@ -39,7 +39,7 @@ void send_file(int sock) {
     }
     free(namelist);
 
-    printf("请输入要发送的文件名：");
+    printf("Input the filename to send:");
 
     fgets(filename, sizeof(filename), stdin);
     filename[strcspn(filename, "\n")] = '\0';  
@@ -64,21 +64,20 @@ void send_file(int sock) {
     }
 
     fclose(fp);
-    printf("文件发送完成。\n");
+    printf("File Transfered\n");
 }
 
 void download_file(int sock) {
-    // 检查是否已经在download目录下
     char filename[256];
     char buffer[BUFSIZE];
-    printf("可下载文件列表：\n");
+    printf("File list:\n");
     char line[BUFSIZE];
     int line_pos = 0;
 
     while (1) {
         int len = recv(sock, buffer, BUFSIZE - 1, 0);
         if (len <= 0) {
-            printf("连接断开或读取失败\n");
+            printf("Connection error\n");
             return;
         }
         buffer[len] = '\0';
@@ -101,10 +100,10 @@ void download_file(int sock) {
     }
     done_list:
     ;
-    printf("请输入要下载的文件名：");
+    printf("Input the filename to download:");
     read(STDIN_FILENO, filename, sizeof(filename));
     filename[strcspn(filename, "\n")] = '\0';  // 去掉换行符
-    printf("正在下载文件：%s\n", filename);
+    printf("Downloading:%s\n", filename);
     send(sock, filename, sizeof(filename), 0);
     long filesize;
     recv(sock, &filesize, sizeof(filesize), 0);
@@ -116,20 +115,20 @@ void download_file(int sock) {
         received += len;
     }
     fclose(fp);
-    printf("文件下载完成。\n");
+    printf("File downloaded\n");
 }
 
 
 int main() {
-    system("mkdir -p download");
-    chdir("download");
+    system("mkdir -p client_dl");
+    chdir("client_dl");
     while(1) {
         
         print_menu();
         char choice[0x10];
         scanf("%s", choice);
         if(!strcmp(choice, "0")) {
-            printf("退出客户端\n");
+            printf("Exit\n");
             break;
         }
         int sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
@@ -145,7 +144,7 @@ int main() {
             send(sock, "DOWNLOAD", 16, 0);
             download_file(sock);
         } else {
-            printf("无效的选项。\n");
+            printf("Unknown command\n");
         }
         close(sock);
     }
