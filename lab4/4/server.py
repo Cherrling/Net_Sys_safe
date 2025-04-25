@@ -37,7 +37,7 @@ def login():
         decrypted_nonce = decrypt(encrypted_nonce, key=hashed1[:8])
 
         # 登录成功写入日志
-        with open('login_log.txt', 'a') as f:
+        with open('login_log.txt', 'a', encoding='utf-8') as f:
             from datetime import datetime
             f.write(f'{datetime.now()} - {username} 登录成功，认证码：{decrypted_nonce}\n')
 
